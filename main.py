@@ -9,18 +9,21 @@ import tempfile
 from dotenv import load_dotenv
 
 # Load environment variables
-load_dotenv()
+load_dotenv(override=True)
 HUGGING_FACE_TOKEN = os.getenv("HUGGING_FACE_TOKEN")
-CATEGORY = os.getenv("CATEGORY")
+CATEGORY = os.getenv("CATEGORY", "undefined")
 MAX_VIDEOS_PER_CATEGORY = int(os.getenv("MAX_VIDEOS_PER_CATEGORY", 100))
+print("Downloading videos from category:", CATEGORY)
 
 login(HUGGING_FACE_TOKEN)
 
 # Load dataset (streaming mode)
 dataset = load_dataset("HuggingFaceFV/finevideo", split="train", streaming=True)
 
+
 def is_desired_category(sample):
-    return sample['json']['content_parent_category'] == CATEGORY
+    return sample["json"]["content_parent_category"] == CATEGORY
+
 
 filtered_dataset = filter(is_desired_category, dataset)
 
@@ -35,7 +38,7 @@ for idx, sample in enumerate(filtered_dataset):
         break
 
     # Load video from bytes & Save video bytes to a temporary file
-    video_bytes = BytesIO(sample['mp4'])
+    video_bytes = BytesIO(sample["mp4"])
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_video_file:
         temp_video_file.write(video_bytes.read())
         temp_video_path = temp_video_file.name
@@ -45,26 +48,28 @@ for idx, sample in enumerate(filtered_dataset):
             duration = video.duration
 
             # Generate random start and end times for trimming
-            if duration > 20:  
+            if duration > 20:
                 start_time = random.uniform(0, duration - 20)
                 end_time = start_time + random.uniform(10, 20)
-                end_time = min(end_time, duration)  
+                end_time = min(end_time, duration)
 
                 trimmed_video = video.subclipped(start_time, end_time)
             else:
-                trimmed_video = video  
+                trimmed_video = video
 
             video_filename = f"{VIDEO_DIR}/{CATEGORY.lower()}_{idx}.mp4"
-            trimmed_video.write_videofile(video_filename, codec="libx264", audio_codec="aac")
+            trimmed_video.write_videofile(
+                video_filename, codec="libx264", audio_codec="aac"
+            )
 
         # Save metadata
         custom_metadata = {
-            "category": sample['json']['content_parent_category'],
-            "description": sample['json']['content_metadata']['description'],
+            "category": sample["json"]["content_parent_category"],
+            "description": sample["json"]["content_metadata"]["description"],
             "length": trimmed_video.duration,
         }
         json_filename = f"{METADATA_DIR}/{CATEGORY.lower()}_{idx}.json"
-        with open(json_filename, 'w') as json_file:
+        with open(json_filename, "w") as json_file:
             json.dump(custom_metadata, json_file)
     finally:
         # Clean up temporary file
