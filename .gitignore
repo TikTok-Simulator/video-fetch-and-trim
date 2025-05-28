@@ -1,3 +1,4 @@
 metadata/
 venv/
 videos/
+.DS_Store
